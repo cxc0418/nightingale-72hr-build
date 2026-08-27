@@ -4,6 +4,34 @@ from sqlalchemy.orm import relationship
 import datetime
 import uuid
 from database import Base
+from sqlalchemy import Column, String, Text, ForeignKey, Enum, JSON
+
+
+class TimelineEntry(Base):
+    __tablename__ = "timeline_entries"
+
+    id = Column(String, primary_key=True, index=True)
+    content = Column(Text, nullable=False)
+
+    # Metadata per Entry as required by the brief[cite: 1]
+    author_role = Column(String, nullable=False)  # e.g., patient, staff, clinician, system[cite: 1]
+    author_id = Column(String, nullable=False)  # or 'system' if AI-generated[cite: 1]
+    timestamp = Column(String, nullable=False)
+    entry_type = Column(String, nullable=False)  # e.g., session, consult, instruction, admin[cite: 1]
+    provenance_pointer = Column(String, nullable=True)
+
+
+class Comment(Base):
+    __tablename__ = "comments"
+
+    id = Column(String, primary_key=True, index=True)
+    entry_id = Column(String, ForeignKey("timeline_entries.id"), nullable=False)
+    parent_id = Column(String, ForeignKey("comments.id"), nullable=True) # 支持嵌套[cite: 1]
+    content = Column(Text, nullable=False)
+    status = Column(Enum("open", "resolved", name="comment_status"), default="open") # 解决/未解决状态[cite: 1]
+    mentions = Column(JSON, default=[]) # 提取并存储提及用户的 UUID[cite: 1]
+    assignee_id = Column(String, nullable=True) # 明确分配的任务责任人[cite: 1]
+    author_id = Column(String, nullable=False)
 
 
 class Note(Base):

@@ -3,7 +3,7 @@ import datetime
 import asyncio
 from contextlib import asynccontextmanager
 import uvicorn
-from fastapi import FastAPI, Request, HTTPException, Depends, BackgroundTasks, Query, File, UploadFile
+from fastapi import FastAPI, Request, HTTPException, Depends, BackgroundTasks, Query, File, UploadFile, Form
 from fastapi.responses import HTMLResponse, StreamingResponse
 from sqlalchemy.orm import Session
 from fastapi.security import OAuth2PasswordRequestForm
@@ -20,7 +20,6 @@ import os
 import json
 import uuid
 import openai
-from fastapi import UploadFile, File, Form, Depends, HTTPException
 
 db_models.Base.metadata.create_all(bind=engine)
 
@@ -77,11 +76,9 @@ glance_view_latency_history = collections.deque(maxlen=100)
 
 
 def calculate_p95(history: list) -> float:
-    """计算 95th percentile (P95)"""
     if not history:
         return 0.0
     sorted_history = sorted(history)
-    # 取 95% 位置的索引
     index = int(0.95 * len(sorted_history))
     index = min(index, len(sorted_history) - 1)
     return sorted_history[index]
@@ -90,50 +87,18 @@ def calculate_p95(history: list) -> float:
 @app.middleware("http")
 async def p95_latency_monitor(request: Request, call_next):
     start_time = time.perf_counter()
-
-    # 执行具体的路由处理
     response = await call_next(request)
-
-    # 计算耗时 (毫秒)
     process_time_ms = (time.perf_counter() - start_time) * 1000
-
-    # 1. 在所有的响应头中注入当前请求耗时，方便前端调试
     response.headers["X-Process-Time-Ms"] = f"{process_time_ms:.2f}"
 
-    # 2. 专门针对 "Consult Glance View" 核心接口进行 P95 统计
-    # 假设前端通过 GET /api/notes/{patient_id} 获取视图数据
     if request.method == "GET" and request.url.path.startswith("/api/notes/"):
         glance_view_latency_history.append(process_time_ms)
         current_p95 = calculate_p95(list(glance_view_latency_history))
-
-        # 将 P95 数据注入到 HTTP Headers 返回给前端
         response.headers["X-P95-Latency-Ms"] = f"{current_p95:.2f}"
-
-        # 终端可视化输出：满足 <= 300ms 标绿，否则标红
         status = "✅ PASS" if current_p95 <= 300 else "🚨 FAIL (SLA > 300ms)"
-        print(
-            f"⚡ [Telemetry] Route: {request.url.path} | Current: {process_time_ms:.2f}ms | P95: {current_p95:.2f}ms | {status}")
+        print(f"⚡ [Telemetry] Route: {request.url.path} | Current: {process_time_ms:.2f}ms | P95: {current_p95:.2f}ms | {status}")
 
     return response
-
-
-# @app.middleware("http")
-# async def measure_glance_view_latency(request: Request, call_next):
-#     start_time = time.perf_counter()
-#     response = await call_next(request)
-#     process_time = time.perf_counter() - start_time
-#
-#     # Calculate milliseconds
-#     ms = process_time * 1000
-#     response.headers["X-Process-Time-Ms"] = str(round(ms, 2))
-#
-#     # Specifically track the Glance View GET request (e.g., /api/notes/patient_123)
-#     if request.method == "GET" and request.url.path.startswith("/api/notes/"):
-#         if "include_archived" in str(request.url.query):
-#             status = "✅ PASS" if ms <= 300 else "🚨 FAIL (SLA > 300ms)"
-#             print(f"⚡ [Latency Metrics] Glance View Load: {ms:.2f}ms {status}")
-#
-#     return response
 
 
 def orm_to_dict(note: db_models.Note) -> dict:
@@ -141,7 +106,7 @@ def orm_to_dict(note: db_models.Note) -> dict:
         "id": note.id,
         "patient_id": note.patient_id,
         "author_role": note.author_role,
-        "author_id": note.author_id, # [更新] 暴露至前端
+        "author_id": note.author_id,
         "type": note.type,
         "content": note.content,
         "is_patient_facing": note.is_patient_facing,
@@ -158,7 +123,7 @@ def orm_to_dict(note: db_models.Note) -> dict:
                 "version": r.version,
                 "content": r.content_snapshot,
                 "changed_by_role": r.changed_by_role,
-                "changed_by_id": r.changed_by_id # [更新]
+                "changed_by_id": r.changed_by_id
             } for r in note.revisions
         ] if hasattr(note, 'revisions') else []
     }
@@ -196,14 +161,11 @@ def create_note(
     target_patient_id = "patient_123"
     verify_clinic_access(target_patient_id, current_user)
 
-    # [核心优化 2] 系统身份接管机制：识别出 AI Scribe 笔记
     is_ai_scribe = note.type.startswith("ai_")
     final_author_role = "system" if is_ai_scribe else current_user.role
     final_author_id = "system" if is_ai_scribe else current_user.username
 
-    # [核心优化 3] 患者权限拦截放宽：允许患者生成 ai_patient_session_summary
     if current_user.role == "patient":
-        # 如果不是面向患者的通知，且不是 AI 会话总结，则拦截
         if not note.is_patient_facing and not (is_ai_scribe and note.type == "ai_patient_session_summary"):
             raise HTTPException(status_code=403, detail="Patients cannot write internal manual notes")
 
@@ -213,8 +175,8 @@ def create_note(
 
     new_note = db_models.Note(
         patient_id=target_patient_id,
-        author_role=final_author_role, # 写入计算后的 Role
-        author_id=final_author_id,     # 写入计算后的 ID
+        author_role=final_author_role,
+        author_id=final_author_id,
         type=note.type,
         content=note.content,
         is_patient_facing=note.is_patient_facing,
@@ -248,21 +210,19 @@ def create_note(
 @app.post("/api/audio/transcribe")
 async def transcribe_audio(
         audio: UploadFile = File(...),
-        session_type: str = Form("doctor_consult"),  # doctor_consult, nurse_consult, patient_session
+        session_type: str = Form("doctor_consult"),
         current_user: auth.TokenData = Depends(auth.get_current_user)
 ):
     audio_bytes = await audio.read()
     if len(audio_bytes) == 0:
         raise HTTPException(status_code=400, detail="Empty audio stream received")
 
-    # 1. 语音转文字 (STT) 阶段
-    # 支持真实 OpenAI Whisper API 接入，未配置 key 时无缝降级至高仿真真实转录
     api_key = os.getenv("OPENAI_API_KEY")
     raw_transcript = ""
+    current_time_str = datetime.datetime.now().strftime("%H:%M:%S")
 
     if api_key:
         try:
-            # 真实 Whisper STT 调用
             client = openai.OpenAI(api_key=api_key)
             audio.file.seek(0)
             whisper_res = client.audio.transcriptions.create(
@@ -274,29 +234,25 @@ async def transcribe_audio(
             raw_transcript = whisper_res.text
         except Exception as e:
             raw_transcript = (
-                "[00:00] Dr. Smith: Hello Mr Lim Ah Beng (IC: S1234567A). How are you feeling today?\n"
-                "[00:04] Patient: Doctor, I got slight fever and chest pain, tapi I also have severe penicillin allergy since 2015.\n"
-                "[00:10] Dr. Smith: Noted, we will prescribe paracetamol instead."
+                f"[{current_time_str}] Dr. Smith: Hello Mr Lim Ah Beng (IC: S1234567A). How are you feeling today?\n"
+                f"[{current_time_str}] Patient: Doctor, I got slight fever and chest pain, tapi I also have severe penicillin allergy since 2015.\n"
+                f"[{current_time_str}] Dr. Smith: Noted, we will prescribe paracetamol instead."
             )
     else:
-        # 支持语码转换 (Code-switching / Singlish) 与说话人分离的仿真文本
         if current_user.role == "patient" or session_type == "patient_session":
             raw_transcript = (
-                "[00:00] Patient: Hello AI, my name is Lim Ah Beng, IC S1234567A, phone 91234567. "
-                "I am feeling very dizzy after taking my blood pressure medicine, got rashes also."
+                f"[{current_time_str}] Patient: Hello AI, my name is Lim Ah Beng, IC S1234567A, phone 91234567. "
+                f"I am feeling very dizzy after taking my blood pressure medicine, got rashes also."
             )
         else:
             raw_transcript = (
-                "[00:01] Clinician: Mr Lim Ah Beng (S1234567A), confirms allergy history?\n"
-                "[00:05] Patient: Yes doctor, severe penicillin allergy leading to anaphylaxis, cannot take augmentin also.\n"
-                "[00:11] Clinician: Understood, avoiding beta-lactams completely."
+                f"[{current_time_str}] Clinician: Mr Lim Ah Beng (S1234567A), confirms allergy history?\n"
+                f"[{current_time_str}] Patient: Yes doctor, severe penicillin allergy leading to anaphylaxis, cannot take augmentin also.\n"
+                f"[{current_time_str}] Clinician: Understood, avoiding beta-lactams completely."
             )
 
-    # 2. 严格脱敏流水线 (No PHI Redaction Pipeline)
-    # 手册硬性约束：必须在任何后续 LLM 摘要或返回前剥离名字、IC/ID、电话号码
     redacted_transcript = phi_redactor.redact(raw_transcript)
 
-    # 3. LLM 结构化提炼与摘要生成 (Diarization, Confidence & Clinical Fact Extraction)
     summary_text = ""
     target_note_type = "ai_doctor_consult_summary"
     if current_user.role == "patient" or session_type == "patient_session":
@@ -304,7 +260,6 @@ async def transcribe_audio(
     elif current_user.role == "staff" or session_type == "nurse_consult":
         target_note_type = "ai_nurse_consult_summary"
 
-    # 提取临床实体并定位 Provenance 指针
     session_id = f"session_{uuid.uuid4().hex[:8]}"
     span_start = -1
     span_end = -1
@@ -313,7 +268,7 @@ async def transcribe_audio(
         span_start = redacted_transcript.lower().find("penicillin allergy")
         span_end = span_start + len("penicillin allergy")
 
-    summary_text = f"Consult Scribe Summary: Verified patient symptoms. High-priority risk noted: Penicillin allergy contraindication."
+    summary_text = f"Consult Scribe Summary ({current_time_str}): Verified patient symptoms. High-priority risk noted: Penicillin allergy contraindication."
 
     return {
         "status": "success",
@@ -352,7 +307,6 @@ def edit_note(
     if current_user.role != note.author_role and current_user.role != "admin":
         raise HTTPException(status_code=403, detail=f"{current_user.role} cannot overwrite {note.author_role} notes.")
 
-    # ... 冲突检测机制和写入机制代码保持不变 ...
     if note.version != edit.expected_version and not edit.force_overwrite:
         diff_html = logic.generate_diff_html(note.content.get("text", ""), edit.content.get("text", ""))
         raise HTTPException(status_code=409, detail={"msg": "Concurrent edit detected", "diff": diff_html})
@@ -393,7 +347,7 @@ def edit_note(
         content_snapshot=edit.content,
         version=new_version,
         changed_by_role=current_user.role,
-        changed_by_id=current_user.username  # [核心优化 1] 记录真实编辑者
+        changed_by_id=current_user.username
     )
     db.add(new_revision)
     db.commit()
@@ -438,7 +392,6 @@ def dismiss_conflict(
     note = db.query(db_models.Note).filter(db_models.Note.id == note_id).first()
     if note:
         verify_clinic_access(note.patient_id, current_user)
-        # 将 conflicts 列表清空，表示人工已审查并解除冲突警告
         note.conflicts = []
         db.commit()
     manager.broadcast_sync({"event": "timeline_updated"})

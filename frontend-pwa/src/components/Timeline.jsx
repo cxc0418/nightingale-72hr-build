@@ -1,19 +1,17 @@
 import { useState, useEffect, useRef } from 'react';
 import DOMPurify from 'dompurify';
+import RichCommentEditor from './RichCommentEditor';
 
 // ==========================================
 // [核心加分项] 前端实时 Diff 算法 (基于 LCS 动态规划)
-// 用于实现手册要求的 "view changes since X" 可视化
 // ==========================================
 const generateDiffHtml = (oldText, newText) => {
   if (!oldText && !newText) return "";
   const o = (oldText || "").split(/\s+/).filter(Boolean);
   const n = (newText || "").split(/\s+/).filter(Boolean);
 
-  // 防止极端长文本阻塞主线程（兜底）
   if (o.length > 300 || n.length > 300) return newText;
 
-  // 1. 构建 DP 矩阵
   const dp = Array(o.length + 1).fill(null).map(() => Array(n.length + 1).fill(0));
   for (let i = 1; i <= o.length; i++) {
       for (let j = 1; j <= n.length; j++) {
@@ -22,7 +20,6 @@ const generateDiffHtml = (oldText, newText) => {
       }
   }
 
-  // 2. 回溯路径，生成高亮 HTML
   let i = o.length, j = n.length;
   const res = [];
   while (i > 0 || j > 0) {
@@ -30,11 +27,9 @@ const generateDiffHtml = (oldText, newText) => {
           res.unshift(`<span class="text-slate-600">${o[i - 1]}</span>`);
           i--; j--;
       } else if (j > 0 && (i === 0 || dp[i][j - 1] >= dp[i - 1][j])) {
-          // 当前版本新增的 (绿字)
           res.unshift(`<ins class="text-emerald-700 bg-emerald-100 px-1 rounded no-underline font-semibold">${n[j - 1]}</ins>`);
           j--;
       } else if (i > 0 && (j === 0 || dp[i][j - 1] < dp[i - 1][j])) {
-          // 历史版本中被删除的 (红字+删除线)
           res.unshift(`<del class="text-rose-600 bg-rose-50 px-1 rounded line-through opacity-70">${o[i - 1]}</del>`);
           i--;
       }
@@ -51,6 +46,9 @@ export default function Timeline({ token, role, timelineTick, setReplyToId }) {
   const [historyExpanded, setHistoryExpanded] = useState({});
   const [localRefresh, setLocalRefresh] = useState(0);
 
+  // 🚀 控制内联回复框的状态
+  const [inlineReplyId, setInlineReplyId] = useState(null);
+
   // 患者专属语音流 Refs
   const [isPatientRecording, setIsPatientRecording] = useState(false);
   const [patientAudioLoading, setPatientAudioLoading] = useState(false);
@@ -61,8 +59,12 @@ export default function Timeline({ token, role, timelineTick, setReplyToId }) {
   useEffect(() => {
     if (!token) return;
     const fetchTimeline = async () => {
-      setIsLoading(true);
+      // 🚀 核心修复：仅在无数据时显示硬加载，避免全局闪烁刷新
+      if (notes.length === 0) {
+        setIsLoading(true);
+      }
       setError(null);
+
       try {
         const res = await fetch(`/api/notes/patient_123?include_archived=${showArchived}&t=${Date.now()}`, {
           headers: {
@@ -118,7 +120,6 @@ export default function Timeline({ token, role, timelineTick, setReplyToId }) {
     setLocalRefresh(prev => prev + 1);
   };
 
-  // 【新加】取消解决 API 交互
   const unresolveNote = async (id) => {
     await fetch(`/api/notes/${id}/unresolve`, {
       method: 'POST',
@@ -127,7 +128,6 @@ export default function Timeline({ token, role, timelineTick, setReplyToId }) {
     setLocalRefresh(prev => prev + 1);
   };
 
-  // 【新加】冲突确认/消除 API 交互
   const dismissConflict = async (id) => {
     await fetch(`/api/notes/${id}/dismiss_conflict`, {
       method: 'POST',
@@ -202,10 +202,29 @@ export default function Timeline({ token, role, timelineTick, setReplyToId }) {
     setHistoryExpanded(prev => ({ ...prev, [noteId]: !prev[noteId] }));
   };
 
-  // ==========================================
-  // [核心实现] 患者专属语音捕获处理 (Pre-Consult AI Intake Session)
-  // 加上了针对嘈杂环境（Noise suppression, echo cancellation）的底层音频约束
-  // ==========================================
+  // 🚀 处理内联评论提交
+  const handleInlineSubmit = async (parentId, commentData) => {
+    try {
+      await fetch('/api/notes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({
+          content: {
+            text: commentData.content,
+            assignees: commentData.assignee_name ? [commentData.assignee_name.toLowerCase()] : []
+          },
+          type: (role === 'clinician' || role === 'dr_smith') ? 'clinician_note' : 'staff_note',
+          is_patient_facing: false,
+          parent_id: parentId
+        })
+      });
+      setInlineReplyId(null);
+      setLocalRefresh(prev => prev + 1);
+    } catch (err) {
+      console.error("Inline reply failed:", err);
+    }
+  };
+
   const togglePatientVoiceCapture = async () => {
     if (isPatientRecording) {
       if (patientMediaRecorderRef.current && patientMediaRecorderRef.current.state !== 'inactive') {
@@ -221,10 +240,10 @@ export default function Timeline({ token, role, timelineTick, setReplyToId }) {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
-          noiseSuppression: true,      // 开启底层主动降噪 (应对嘈杂病房环境)
-          echoCancellation: true,      // 回声消除
-          autoGainControl: true,       // 自动增益控制
-          sampleRate: 44100            // 高保真采样
+          noiseSuppression: true,
+          echoCancellation: true,
+          autoGainControl: true,
+          sampleRate: 44100
         }
       });
       patientStreamRef.current = stream;
@@ -252,7 +271,6 @@ export default function Timeline({ token, role, timelineTick, setReplyToId }) {
 
           if (res.ok) {
             const data = await res.json();
-            // 提交至后端生成 ai_patient_session_summary
             await fetch('/api/notes', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
@@ -283,14 +301,13 @@ export default function Timeline({ token, role, timelineTick, setReplyToId }) {
   };
 
   // ==========================================
-  // 视图渲染 A：患者视角的页面 (包含 Patient Voice Capture)
+  // 视图渲染 A：患者视角的页面
   // ==========================================
   if (role === 'patient_123' || role === 'patient') {
     const patientNotes = notes.filter(n => n.is_patient_facing);
 
     return (
       <div className="space-y-6">
-        {/* 患者端 AI Intake 录音专属卡片 */}
         <div className="bg-white p-6 rounded-lg shadow-sm border border-slate-200">
           <h3 className="text-lg font-bold text-slate-800 mb-2 flex items-center gap-2">
             🎙️ Pre-Consult AI Intake Scribe
@@ -311,30 +328,33 @@ export default function Timeline({ token, role, timelineTick, setReplyToId }) {
           </button>
         </div>
 
-        {/* 医嘱与护理计划视图 */}
         <div className="bg-white p-6 rounded-lg shadow-sm border-t-4 border-emerald-500">
           <h2 className="text-2xl font-bold mb-2 text-emerald-800">🏥 My Care Plan & Instructions</h2>
           <p className="text-sm text-slate-500 mb-6">These are the clinical summaries and instructions shared with you by your care team.</p>
 
           <div className="space-y-4">
-            {isLoading ? (
+            {/* 🚀 核心修复：防止数据闪烁 */}
+            {isLoading && patientNotes.length === 0 ? (
                <div className="text-center text-slate-400 py-10 animate-pulse">Loading your records...</div>
             ) : patientNotes.length === 0 ? (
               <div className="text-center text-slate-400 py-10 bg-slate-50 rounded-lg border border-dashed border-slate-200">
                 No instructions or summaries are available yet.
               </div>
             ) : (
-              patientNotes.map(note => (
-                <div key={note.id} className="p-5 bg-emerald-50 border border-emerald-100 rounded-lg shadow-sm">
-                  <div className="flex justify-between items-center mb-3">
-                    <span className="text-xs font-bold text-emerald-700 bg-emerald-200/50 px-2 py-1 rounded">
-                      From {note.author_role}
-                    </span>
-                    <span className="text-xs text-emerald-600/70 font-medium">{note.created_at}</span>
+              <>
+                {isLoading && <div className="text-right text-[10px] text-slate-400 animate-pulse mb-2">Syncing latest changes...</div>}
+                {patientNotes.map(note => (
+                  <div key={note.id} className="p-5 bg-emerald-50 border border-emerald-100 rounded-lg shadow-sm">
+                    <div className="flex justify-between items-center mb-3">
+                      <span className="text-xs font-bold text-emerald-700 bg-emerald-200/50 px-2 py-1 rounded">
+                        From {note.author_role}
+                      </span>
+                      <span className="text-xs text-emerald-600/70 font-medium">{note.created_at}</span>
+                    </div>
+                    <div className="text-sm text-slate-800 leading-relaxed whitespace-pre-wrap" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(note.content?.text || "") }} />
                   </div>
-                  <div className="text-sm text-slate-800 leading-relaxed whitespace-pre-wrap" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(note.content?.text || "") }} />
-                </div>
-              ))
+                ))}
+              </>
             )}
           </div>
         </div>
@@ -352,7 +372,6 @@ export default function Timeline({ token, role, timelineTick, setReplyToId }) {
     let rawText = note.content?.text || "";
     let safeText = DOMPurify.sanitize(rawText);
 
-    // Provenance (溯源) 实体高亮
     if (note.provenance_pointer && note.provenance_pointer.span_start !== undefined) {
         const start = note.provenance_pointer.span_start;
         const end = note.provenance_pointer.span_end;
@@ -364,7 +383,6 @@ export default function Timeline({ token, role, timelineTick, setReplyToId }) {
         }
     }
 
-    // @mentions 高亮
     safeText = safeText.replace(/@(\w+)/g, '<span class="text-blue-600 font-bold bg-blue-100 px-1 rounded">@$1</span>');
 
     return (
@@ -378,12 +396,10 @@ export default function Timeline({ token, role, timelineTick, setReplyToId }) {
       >
         <div className="flex justify-between items-center mb-2">
             <div className="flex items-center gap-2">
-                {/* 身份 Badge */}
                 <span className={`text-xs font-bold capitalize px-2 py-1 rounded border border-current border-opacity-20 ${roleColor}`}>
                   {note.author_role} {note.author_id && `(${note.author_id})`}
                 </span>
 
-                {/* AI 类型 Badge */}
                 {note.author_role === 'system' && note.type && (
                   <span className="bg-purple-100 text-purple-700 border border-purple-200 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide">
                     🤖 {note.type.replace(/_/g, ' ')}
@@ -396,7 +412,6 @@ export default function Timeline({ token, role, timelineTick, setReplyToId }) {
             <span className="text-[11px] text-slate-400 font-medium">v{note.version} | {note.created_at}</span>
         </div>
 
-        {/* 【增强】支持交互式 Dismiss 冲突警告 */}
         {note.conflicts && note.conflicts.length > 0 && (
           <div className="text-xs text-rose-700 font-bold bg-rose-100 p-2 rounded mb-2 border border-rose-200 flex justify-between items-start gap-2 shadow-sm">
             <span>❌ {note.conflicts.join(' | ')}</span>
@@ -415,8 +430,12 @@ export default function Timeline({ token, role, timelineTick, setReplyToId }) {
         <div className="text-sm text-slate-800 mb-3 leading-relaxed whitespace-pre-wrap" dangerouslySetInnerHTML={{ __html: safeText }} />
 
         <div className="flex flex-wrap gap-4 pt-2 border-t border-slate-100 items-center">
-            <button onClick={() => { setReplyToId(note.id); window.scrollTo({ top: 0, behavior: 'smooth' }); }} className="text-xs text-indigo-500 hover:text-indigo-700 font-medium flex items-center gap-1">
-              ↳ Reply
+
+            <button
+              onClick={() => setInlineReplyId(inlineReplyId === note.id ? null : note.id)}
+              className="text-xs text-indigo-500 hover:text-indigo-700 font-medium flex items-center gap-1"
+            >
+              {inlineReplyId === note.id ? '✕ Cancel Reply' : '↳ Reply Inline'}
             </button>
 
             {role !== 'patient_123' && role !== 'patient' && (role === note.author_role || role === note.author_id || role === 'admin' || role === 'admin_alice') && (
@@ -429,7 +448,6 @@ export default function Timeline({ token, role, timelineTick, setReplyToId }) {
               </button>
             )}
 
-            {/* 【增强】Resolve / Unresolve 动态切换状态 */}
             {!note.resolved && role !== 'patient_123' && role !== 'patient' && (
               <button onClick={() => resolveNote(note.id)} className="text-xs text-slate-500 hover:text-emerald-600 font-medium">✔ Resolve</button>
             )}
@@ -446,9 +464,16 @@ export default function Timeline({ token, role, timelineTick, setReplyToId }) {
             </button>
         </div>
 
-        {/* ==========================================
-            优化后的 History 展示区 (集成 Diff 渲染)
-            ========================================== */}
+        {/* 🚀 内联编辑器渲染区 */}
+        {inlineReplyId === note.id && (
+          <div className="mt-3 pl-4 border-l-2 border-indigo-200 animate-in fade-in slide-in-from-top-2">
+            <RichCommentEditor
+              onCommentAdd={(newCommentData) => handleInlineSubmit(note.id, newCommentData)}
+            />
+          </div>
+        )}
+
+        {/* History 展示区 */}
         {historyExpanded[note.id] && note.revisions && (
           <div className="mt-4 p-4 bg-slate-50 rounded-lg border border-slate-200 shadow-inner">
             <div className="flex justify-between items-center mb-3 border-b border-slate-200 pb-2">
@@ -511,7 +536,8 @@ export default function Timeline({ token, role, timelineTick, setReplyToId }) {
       </div>
 
       <div className="space-y-4">
-        {isLoading ? (
+        {/* 🚀 核心修复：防止数据闪烁并添加后台同步提示 */}
+        {isLoading && notes.length === 0 ? (
           <div className="text-center text-slate-400 py-10 animate-pulse">Loading patient history...</div>
         ) : error ? (
           <div className="text-center text-rose-700 bg-rose-50 border-2 border-rose-200 py-10 rounded-lg font-bold flex flex-col items-center justify-center gap-2">
@@ -521,7 +547,10 @@ export default function Timeline({ token, role, timelineTick, setReplyToId }) {
         ) : notes.length === 0 ? (
           <div className="text-center text-slate-400 py-10">No records found for this patient.</div>
         ) : (
-          notes.map(note => renderNoteNode(note))
+          <>
+            {isLoading && <div className="text-right text-[10px] text-slate-400 animate-pulse mb-2">Syncing latest changes...</div>}
+            {notes.map(note => renderNoteNode(note))}
+          </>
         )}
       </div>
 
