@@ -4,13 +4,13 @@ import MentionsDropdown from './MentionsDropdown';
 export default function RichCommentEditor({ onCommentAdd }) {
   const [content, setContent] = useState('');
   const [showMentions, setShowMentions] = useState(false);
-  const [assignTask, setAssignTask] = useState(false); // 控制可选任务分配[cite: 1]
+  const [assignTask, setAssignTask] = useState(false); // Controls optional task assignment[cite: 18]
   const [selectedMention, setSelectedMention] = useState(null);
 
   const handleInput = (e) => {
     const val = e.target.value;
     setContent(val);
-    // 正则监听 @ 符号以触发下拉菜单[cite: 1]
+    // Regex listener for the @ symbol to trigger the dropdown menu[cite: 18]
     const match = val.match(/@(\w*)$/);
     setShowMentions(!!match);
   };
@@ -29,7 +29,7 @@ export default function RichCommentEditor({ onCommentAdd }) {
       content,
       status: 'open',
       assignee_name: assignTask && selectedMention ? selectedMention.name : null,
-      author_name: 'Current Staff' // 实际应从 Auth Context 获取
+      author_name: 'Current Staff' // Ideally fetched from Auth Context in a full implementation[cite: 18]
     });
     setContent('');
     setAssignTask(false);

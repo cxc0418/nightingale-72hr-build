@@ -64,10 +64,10 @@ export default function ActionArea({ token, role, replyToId, setReplyToId }) {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
-          noiseSuppression: true,      // 开启底层主动降噪
-          echoCancellation: true,      // 回声消除 (防止外放声音被再次录入)
-          autoGainControl: true,       // 自动增益控制 (处理医生走动时声音忽大忽小)
-          sampleRate: 44100            // 保证医疗语音的高保真采样
+          noiseSuppression: true,
+          echoCancellation: true,
+          autoGainControl: true,
+          sampleRate: 44100
         }
       });
       streamRef.current = stream;
@@ -119,7 +119,6 @@ export default function ActionArea({ token, role, replyToId, setReplyToId }) {
     setIsProcessing(true);
     setShowTranscriptModal(false);
 
-    // 将脱敏后的语音及结构化总结提交至时间线，带有完整 Provenance 指针与 System 标记
     const formattedContent = `${transcriptData.summary}\n\n[Diarized Transcript]\n${transcriptData.redacted}`;
     await submitNote(
       formattedContent,

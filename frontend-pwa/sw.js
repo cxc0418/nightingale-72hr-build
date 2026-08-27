@@ -2,7 +2,7 @@ const CACHE_NAME = 'nightingale-v1';
 const ASSETS_TO_CACHE = [
   '/',
   '/manifest.json'
-  // 生产环境中会把您的 CSS/JS 打包产物加进来
+  // CSS/JS build assets will be injected here in production
 ];
 
 self.addEventListener('install', (event) => {
@@ -13,7 +13,7 @@ self.addEventListener('install', (event) => {
   );
 });
 
-// 基本的离线降级策略：网络优先，失败则走缓存
+// Basic offline fallback strategy: Network first, fallback to cache
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET' || event.request.url.includes('/api/')) return;
   event.respondWith(

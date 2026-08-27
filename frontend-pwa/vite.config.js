@@ -6,7 +6,7 @@ import tailwindcss from '@tailwindcss/vite'
 export default defineConfig({
   plugins: [
     react(),
-    tailwindcss(), // 激活 Tailwind v4
+    tailwindcss(), // Activate Tailwind v4 plugin
     VitePWA({
       registerType: 'autoUpdate',
       manifest: {

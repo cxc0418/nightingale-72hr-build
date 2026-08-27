@@ -451,7 +451,8 @@ def revert_note(
     new_revision = db_models.NoteRevision(
         content_snapshot=note.content,
         version=note.version,
-        changed_by_role=current_user.role
+        changed_by_role=current_user.role,
+        changed_by_id=current_user.username  # <--- 加上这一行
     )
     note.revisions.append(new_revision)
     db.commit()

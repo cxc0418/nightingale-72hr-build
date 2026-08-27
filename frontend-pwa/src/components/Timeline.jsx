@@ -3,13 +3,14 @@ import DOMPurify from 'dompurify';
 import RichCommentEditor from './RichCommentEditor';
 
 // ==========================================
-// [核心加分项] 前端实时 Diff 算法 (基于 LCS 动态规划)
+// Real-time Diff Algorithm (LCS Dynamic Programming)
 // ==========================================
 const generateDiffHtml = (oldText, newText) => {
   if (!oldText && !newText) return "";
   const o = (oldText || "").split(/\s+/).filter(Boolean);
   const n = (newText || "").split(/\s+/).filter(Boolean);
 
+  // Fallback to raw text if the payload is too large to process efficiently
   if (o.length > 300 || n.length > 300) return newText;
 
   const dp = Array(o.length + 1).fill(null).map(() => Array(n.length + 1).fill(0));
@@ -46,10 +47,10 @@ export default function Timeline({ token, role, timelineTick, setReplyToId }) {
   const [historyExpanded, setHistoryExpanded] = useState({});
   const [localRefresh, setLocalRefresh] = useState(0);
 
-  // 🚀 控制内联回复框的状态
+  // State for inline reply thread
   const [inlineReplyId, setInlineReplyId] = useState(null);
 
-  // 患者专属语音流 Refs
+  // Refs for patient audio streaming
   const [isPatientRecording, setIsPatientRecording] = useState(false);
   const [patientAudioLoading, setPatientAudioLoading] = useState(false);
   const patientMediaRecorderRef = useRef(null);
@@ -59,7 +60,7 @@ export default function Timeline({ token, role, timelineTick, setReplyToId }) {
   useEffect(() => {
     if (!token) return;
     const fetchTimeline = async () => {
-      // 🚀 核心修复：仅在无数据时显示硬加载，避免全局闪烁刷新
+      // Show hard loading only when empty to prevent UI flickering
       if (notes.length === 0) {
         setIsLoading(true);
       }
@@ -202,7 +203,7 @@ export default function Timeline({ token, role, timelineTick, setReplyToId }) {
     setHistoryExpanded(prev => ({ ...prev, [noteId]: !prev[noteId] }));
   };
 
-  // 🚀 处理内联评论提交
+  // Handle inline comment submission
   const handleInlineSubmit = async (parentId, commentData) => {
     try {
       await fetch('/api/notes', {
@@ -301,7 +302,7 @@ export default function Timeline({ token, role, timelineTick, setReplyToId }) {
   };
 
   // ==========================================
-  // 视图渲染 A：患者视角的页面
+  // View A: Patient-facing UI
   // ==========================================
   if (role === 'patient_123' || role === 'patient') {
     const patientNotes = notes.filter(n => n.is_patient_facing);
@@ -333,7 +334,7 @@ export default function Timeline({ token, role, timelineTick, setReplyToId }) {
           <p className="text-sm text-slate-500 mb-6">These are the clinical summaries and instructions shared with you by your care team.</p>
 
           <div className="space-y-4">
-            {/* 🚀 核心修复：防止数据闪烁 */}
+            {/* Show loader or empty states appropriately */}
             {isLoading && patientNotes.length === 0 ? (
                <div className="text-center text-slate-400 py-10 animate-pulse">Loading your records...</div>
             ) : patientNotes.length === 0 ? (
@@ -363,7 +364,7 @@ export default function Timeline({ token, role, timelineTick, setReplyToId }) {
   }
 
   // ==========================================
-  // [核心实现] 递归渲染 Timeline 的节点 (医护视角)
+  // Recursive rendering of Timeline nodes (Clinical View)
   // ==========================================
   const renderNoteNode = (note, depth = 0) => {
     const roleColor = note.author_role === 'clinician' ? 'text-emerald-600 bg-emerald-50' :
@@ -464,7 +465,7 @@ export default function Timeline({ token, role, timelineTick, setReplyToId }) {
             </button>
         </div>
 
-        {/* 🚀 内联编辑器渲染区 */}
+        {/* Inline editor rendering area */}
         {inlineReplyId === note.id && (
           <div className="mt-3 pl-4 border-l-2 border-indigo-200 animate-in fade-in slide-in-from-top-2">
             <RichCommentEditor
@@ -473,7 +474,7 @@ export default function Timeline({ token, role, timelineTick, setReplyToId }) {
           </div>
         )}
 
-        {/* History 展示区 */}
+        {/* History rendering area */}
         {historyExpanded[note.id] && note.revisions && (
           <div className="mt-4 p-4 bg-slate-50 rounded-lg border border-slate-200 shadow-inner">
             <div className="flex justify-between items-center mb-3 border-b border-slate-200 pb-2">
@@ -512,7 +513,7 @@ export default function Timeline({ token, role, timelineTick, setReplyToId }) {
           </div>
         )}
 
-        {/* 递归渲染子节点 (Thread Replies) */}
+        {/* Recursively render child nodes (Thread Replies) */}
         {note.children && note.children.length > 0 && (
           <div className="mt-3">
             {note.children.map(child => renderNoteNode(child, depth + 1))}
@@ -523,7 +524,7 @@ export default function Timeline({ token, role, timelineTick, setReplyToId }) {
   };
 
   // ==========================================
-  // 视图渲染 B：医护视角的页面 (Clinical View)
+  // View B: Clinical UI
   // ==========================================
   return (
     <div className="bg-white p-5 rounded-lg shadow-sm border border-slate-200">
@@ -536,7 +537,7 @@ export default function Timeline({ token, role, timelineTick, setReplyToId }) {
       </div>
 
       <div className="space-y-4">
-        {/* 🚀 核心修复：防止数据闪烁并添加后台同步提示 */}
+        {/* Prevent UI flickering and show background sync indicator */}
         {isLoading && notes.length === 0 ? (
           <div className="text-center text-slate-400 py-10 animate-pulse">Loading patient history...</div>
         ) : error ? (
@@ -554,7 +555,7 @@ export default function Timeline({ token, role, timelineTick, setReplyToId }) {
         )}
       </div>
 
-      {/* 并发冲突 (409) 处理模态框 */}
+      {/* Concurrent Conflict (409) Modal */}
       {diffModal.isOpen && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50">
           <div className="bg-white p-6 rounded-xl w-[90%] md:w-[600px] shadow-2xl">

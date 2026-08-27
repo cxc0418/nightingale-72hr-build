@@ -7,14 +7,19 @@ import datetime
 
 
 def generate_self_signed_cert():
+    """
+    Generates a self-signed RSA certificate for localhost development
+    and writes cert.pem and key.pem to the project root.
+    """
     # Generate private key
     private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
 
-    # Generate certificate
+    # Define certificate subject and issuer (self-signed for localhost)
     subject = issuer = x509.Name([
         x509.NameAttribute(NameOID.COMMON_NAME, u"localhost"),
     ])
 
+    # Build and sign the certificate
     cert = x509.CertificateBuilder().subject_name(
         subject
     ).issuer_name(
@@ -29,11 +34,11 @@ def generate_self_signed_cert():
         datetime.datetime.utcnow() + datetime.timedelta(days=365)
     ).sign(private_key, hashes.SHA256())
 
-    # Write cert to disk
+    # Write certificate to disk
     with open("cert.pem", "wb") as f:
         f.write(cert.public_bytes(serialization.Encoding.PEM))
 
-    # Write key to disk
+    # Write private key to disk (unencrypted for development)
     with open("key.pem", "wb") as f:
         f.write(private_key.private_bytes(
             encoding=serialization.Encoding.PEM,

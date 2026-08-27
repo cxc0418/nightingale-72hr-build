@@ -5,7 +5,7 @@ export default function GlanceView({ token, role, timelineTick }) {
   const [openTasks, setOpenTasks] = useState([]);
   const [error, setError] = useState(false);
 
-  // 🚀 新增：用来记录当前会话中已经 Accept/Reject 过的卡片 ID
+  // Tracks card IDs that have been Accepted/Rejected during the current session
   const actedRiskIds = useRef(new Set());
 
   useEffect(() => {
@@ -26,7 +26,7 @@ export default function GlanceView({ token, role, timelineTick }) {
           const allNotes = json.data;
 
           const currentRisks = allNotes.filter(n =>
-            // 🚀 核心拦截：如果这个卡片刚才被点过，直接过滤掉，不管后端返回什么
+            // Core intercept: Filter out cards that were just acted upon, regardless of backend response
             !actedRiskIds.current.has(n.id) &&
             ((n.author_role === 'system' && n.importance_status === 'pending') ||
             (n.conflicts && n.conflicts.length > 0 && n.importance_status === 'pending'))
@@ -62,16 +62,16 @@ export default function GlanceView({ token, role, timelineTick }) {
     };
 
     fetchHighlights();
-  }, [token, role, timelineTick]); // 当 timelineTick 触发重载时，会执行这里的过滤
+  }, [token, role, timelineTick]); // Re-run filtering when timelineTick triggers a reload
 
   const handleHighlightAction = async (e, action, noteId, keyword) => {
     e.preventDefault();
     e.stopPropagation();
 
-    // 🚀 记录该卡片已被处理
+    // Record that this card has been processed
     actedRiskIds.current.add(noteId);
 
-    // 乐观更新 UI
+    // Optimistically update the UI
     setRisks(prevRisks => prevRisks.filter(risk => risk.id !== noteId));
 
     try {
@@ -88,9 +88,6 @@ export default function GlanceView({ token, role, timelineTick }) {
       console.error("Network error while updating importance:", err);
     }
   };
-
-  // ... (保留 scrollToProvenance 和渲染部分的 return 代码完全不变)
-  // 为了简洁省略下半部分渲染代码，直接覆盖使用你的原代码即可
 
   const scrollToProvenance = (id) => {
     const el = document.getElementById(`entry-${id}`);
@@ -122,7 +119,7 @@ export default function GlanceView({ token, role, timelineTick }) {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* ========================================================= */}
-        {/* 核心优化区：动态风险渲染 (Risk Reason & Provenance Pointer) */}
+        {/* Core optimization area: Dynamic risk rendering (Risk Reason & Provenance Pointer) */}
         {/* ========================================================= */}
         <div className="space-y-3 flex flex-col justify-start" aria-live="assertive" role="alert">
           <span className="text-rose-800 font-bold mb-1 flex items-center gap-2">
@@ -135,10 +132,10 @@ export default function GlanceView({ token, role, timelineTick }) {
              </div>
           ) : (
             risks.map(risk => {
-              // 尝试从不同的数据结构层级提取后端的动态风险原因
+              // Attempt to extract the dynamic risk reason from various data structure levels
               const riskReason = risk.content?.risk_reason || (risk.conflicts && risk.conflicts[0]) || "Clinical anomaly detected in recent entries.";
 
-              // 提取触发的临床实体关键字，用于反馈给 Self-Learning 逻辑
+              // Extract the triggered clinical entity keyword to feed back into the Self-Learning logic
               const targetEntity = risk.content?.target_entity || "general risk";
 
               return (
@@ -156,7 +153,7 @@ export default function GlanceView({ token, role, timelineTick }) {
                     </span>
                   </div>
 
-                  {/* 显式 UI: 追溯指针 (Provenance Pointer) */}
+                  {/* Explicit UI: Provenance Pointer */}
                   <div className="text-[10px] text-rose-500/80 font-mono flex items-center gap-1 mt-1 opacity-80 group-hover:opacity-100 transition-opacity">
                     <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path></svg>
                     Source Pointer: {risk.provenance_pointer?.session_id ? `Session ${risk.provenance_pointer.session_id.substring(0,6)}` : `Timeline Entry v${risk.version}`}
@@ -181,7 +178,7 @@ export default function GlanceView({ token, role, timelineTick }) {
           )}
         </div>
 
-        {/* 任务看板 */}
+        {/* Action Board */}
         <div className="bg-blue-50/50 p-4 rounded-md border border-blue-100 h-full">
           <span className="text-blue-800 font-bold mb-3 flex items-center gap-2">📋 Action Board ({openTasks.length})</span>
           <ul className="text-sm text-blue-900 space-y-3">

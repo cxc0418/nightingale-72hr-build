@@ -25,3 +25,11 @@ dist-ssr
 # Security & Database
 *.pem
 *.db
+
+# Python & Backend
+__pycache__/
+*.pyc
+.pytest_cache/
+.env
+venv/
+.venv/

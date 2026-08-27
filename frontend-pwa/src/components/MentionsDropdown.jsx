@@ -1,6 +1,6 @@
 import React from 'react';
 
-// 此处数据在实际应用中应由后端提供，受限于 Clinic-scoped 权限[cite: 1]
+// In a production environment, this data should be fetched from the backend and restricted by clinic-scoped permissions[cite: 19]
 const MOCK_CLINIC_USERS = [
   { id: 'u1', name: 'Nurse_Sarah', role: 'Staff' },
   { id: 'u2', name: 'Dr_Chen', role: 'Clinician' }

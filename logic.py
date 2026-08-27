@@ -1,5 +1,3 @@
-import collections
-import json
 import os
 import difflib
 import logging
@@ -8,6 +6,7 @@ from typing import List, Dict
 from sqlalchemy.orm import Session
 from redactor import phi_redactor
 import db_models
+
 
 class MedicalLogicEngine:
     RISK_FLOORS = {
@@ -42,11 +41,13 @@ class MedicalLogicEngine:
         if not record:
             record = db_models.ClinicalEntityWeight(entity_name=kw, baseline_risk=0.0)
             db.add(record)
+
         record.learned_adjustment += delta
         record.interaction_count += 1
         record.last_updated = datetime.datetime.utcnow()
         db.commit()
-        logging.info(f"Self-Learning: Updated '{kw}' by {delta}. Total count: {record.interaction_count}")
+        logging.info(
+            f"Self-Learning Logic: Updated '{kw}' by {delta}. Total interaction count: {record.interaction_count}")
 
     @classmethod
     def detect_conflicts(cls, new_text: str, history_notes: List[Dict]) -> List[str]:
@@ -58,13 +59,16 @@ class MedicalLogicEngine:
             for note in history_notes[-5:]
             if note.get("content", {}).get("text")
         ]
+
         if not recent_texts:
             return []
 
         history_context = "\n---\n".join(recent_texts)
         llm_conflicts = cls._llm_conflict_check(new_text, history_context)
+
         if llm_conflicts is not None:
             return llm_conflicts
+
         return cls._heuristic_conflict_check(new_text, recent_texts)
 
     @classmethod
@@ -87,7 +91,8 @@ class MedicalLogicEngine:
         """
         try:
             if "amoxicillin" in safe_new_text.lower() and "penicillin" in safe_history.lower():
-                return ["[LLM Detected] High-Risk Contraindication: Amoxicillin prescribed with historical Penicillin allergy."]
+                return [
+                    "[LLM Detected] High-Risk Contraindication: Amoxicillin prescribed with historical Penicillin allergy."]
             return []
         except Exception as e:
             logging.error(f"LLM API Error: {e}")
@@ -98,16 +103,20 @@ class MedicalLogicEngine:
         conflicts = []
         new_lower = new_text.lower()
         allergy_negations = ["no known allergies", "nka", "no allergy"]
+
         if any(neg in new_lower for neg in allergy_negations):
             for note_text in recent_texts:
                 txt_lower = note_text.lower()
                 if "allergy" in txt_lower and "no " not in txt_lower:
                     conflicts.append(f"Contradicts prior record: {note_text[:30]}...")
+
         if "amoxicillin" in new_lower:
             for note_text in recent_texts:
                 if "penicillin allergy" in note_text.lower():
                     conflicts.append("Contraindication: Amoxicillin prescribed with Penicillin allergy!")
+
         return conflicts
+
 
 def generate_diff_html(old_text: str, new_text: str) -> str:
     diff = difflib.ndiff(old_text.split(), new_text.split())

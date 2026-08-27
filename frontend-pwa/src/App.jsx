@@ -22,7 +22,7 @@ export default function App() {
     <div className="bg-slate-50 p-6 font-sans text-slate-800 min-h-screen">
       <div className="max-w-4xl mx-auto space-y-6">
 
-        {/* 系统控制台 */}
+        {/* System Console */}
         <div className="bg-slate-900 text-white p-4 rounded-lg flex justify-between shadow-md items-center">
           <span className="font-bold flex items-center gap-2">
             System Console
@@ -41,19 +41,19 @@ export default function App() {
               onChange={(e) => setRole(e.target.value)}
               className="bg-slate-800 text-white border border-slate-700 text-sm rounded p-1.5 focus:ring-2 focus:ring-blue-500 outline-none"
             >
-              {/* 注意：这里的 value 需要和 auth.py 里的 username 一一对应 */}
+              {/* Note: value must match the username keys in auth.py */}
               <option value="dr_smith">Clinician (Dr. Smith)</option>
               <option value="nurse_joy">Staff (Nurse)</option>
               <option value="patient_123">Patient (Limited View)</option>
 
-              {/* 🚀 新增的两个测试角色 */}
+              {/* Test roles for RBAC and isolation */}
               <option value="admin_alice">Admin (Clinic Manager)</option>
               <option value="dr_jones">Clinician (Dr. Jones - Clinic B) [Test 403]</option>
             </select>
           </div>
         </div>
 
-        {/* 找到这行代码，加上 role={role} */}
+        {/* GlanceView rendered only for authorized roles */}
         {role !== 'patient_123' && (
           <GlanceView token={token} role={role} timelineTick={timelineTick} />
         )}

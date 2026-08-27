@@ -1,0 +1,97 @@
+===============================================================================
+ATTRIBUTION & ACKNOWLEDGMENTS
+===============================================================================
+This project was built using the following open-source libraries, frameworks,
+and external models. We are grateful to the maintainers and communities behind
+these projects.
+
+-------------------------------------------------------------------------------
+1. FRONTEND LIBRARIES & FRAMEWORKS (JavaScript / Node.js)
+-------------------------------------------------------------------------------
+* React & React DOM
+  License: MIT License
+  Copyright (c) Meta Platforms, Inc. and affiliates.
+  URL: https://react.dev/
+
+* Vite
+  License: MIT License
+  Copyright (c) 2019-present, Evan You and Vite contributors
+  URL: https://vitejs.dev/
+
+* Tailwind CSS
+  License: MIT License
+  Copyright (c) Tailwind Labs, Inc.
+  URL: https://tailwindcss.com/
+
+* DOMPurify
+  License: MPL-2.0 OR Apache-2.0
+  Copyright (c) 2015 Mario Heiderich
+  URL: https://github.com/cure53/DOMPurify
+
+* Vite PWA Plugin (vite-plugin-pwa)
+  License: MIT License
+  Copyright (c) 2021-present, Anthony Fu
+  URL: https://vite-pwa-org.netlify.app/
+
+-------------------------------------------------------------------------------
+2. BACKEND LIBRARIES & FRAMEWORKS (Python)
+-------------------------------------------------------------------------------
+* FastAPI
+  License: MIT License
+  Copyright (c) 2018 Sebastián Ramírez
+  URL: https://fastapi.tiangolo.com/
+
+* SQLAlchemy
+  License: MIT License
+  Copyright (c) 2005-2023 Michael Bayer and contributors
+  URL: https://www.sqlalchemy.org/
+
+* Uvicorn
+  License: BSD-3-Clause License
+  Copyright (c) 2017-present Tom Christie
+  URL: https://www.uvicorn.org/
+
+* Pydantic
+  License: MIT License
+  Copyright (c) 2017 to present Pydantic Services Inc. and contributors
+  URL: https://docs.pydantic.dev/
+
+* python-jose
+  License: MIT License
+  Copyright (c) 2015 Michael Davis
+  URL: https://github.com/mpdavis/python-jose
+
+* cryptography
+  License: Apache License 2.0 or BSD License
+  Copyright (c) The cryptography developers
+  URL: https://cryptography.io/
+
+* spaCy
+  License: MIT License
+  Copyright (c) 2016-present ExplosionAI UG (haftungsbeschränkt)
+  URL: https://spacy.io/
+
+* pytest
+  License: MIT License
+  Copyright (c) Holger Krekel and pytest-dev team
+  URL: https://pytest.org/
+
+* OpenAI Python SDK
+  License: MIT License
+  Copyright (c) OpenAI
+  URL: https://github.com/openai/openai-python
+
+-------------------------------------------------------------------------------
+3. EXTERNAL MODELS & APIs
+-------------------------------------------------------------------------------
+* OpenAI Whisper-1 (via API)
+  License: Proprietary / Commercial
+  Provider: OpenAI
+  Usage: Real-time audio transcription and clinical summarization pipeline.
+  URL: https://openai.com/
+
+* spaCy English Pipeline (en_core_web_sm)
+  License: MIT License
+  Provider: ExplosionAI
+  Usage: Named Entity Recognition (NER) for the on-device/server PHI redaction pipeline.
+  URL: https://spacy.io/models/en
