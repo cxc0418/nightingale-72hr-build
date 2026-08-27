@@ -9,7 +9,7 @@ Nightingale is a lightweight, AI-powered Electronic Health Record (EHR) and clin
 * **Robust Backend**: Asynchronous RESTful API powered by FastAPI.
 
 ## 🛠️ Tech Stack
-* **Frontend**: React, Vite, TailwindCSS (in `frontend-pwa/`)
+* **Frontend**: React, Vite, TailwindCSS (in `frontend-pwa`)
 * **Backend**: Python, FastAPI, SQLite
 * **AI Integration**: OpenAI Whisper / LLM APIs
 
